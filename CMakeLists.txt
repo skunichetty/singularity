@@ -8,6 +8,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "-Wall")
 
+# Fetch requisite dependencies
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
 if(NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wconversion")
 endif()
@@ -17,3 +26,11 @@ if(CMAKE_CXX_COMPILE_ID STREQUAL "Clang")
 endif()
 
 add_executable(singularity singularity/main.cpp)
+
+enable_testing()
+add_executable(tcp_server_test singularity/tcp_server.test.cpp singularity/tcp_server.cpp)
+target_include_directories(tcp_server_test PRIVATE singularity)
+target_link_libraries(tcp_server_test GTest::gtest_main)
+
+include(GoogleTest)
+gtest_discover_tests(tcp_server_test)
