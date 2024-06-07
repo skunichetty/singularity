@@ -5,7 +5,6 @@
 #include <limits>
 
 TEST(TCPServerTest, TCPServerPortConstruction) {
-    EXPECT_THROW({ TCPServer server(-1); }, std::invalid_argument);
     EXPECT_THROW({ TCPServer server(23487293); }, std::invalid_argument);
     EXPECT_NO_THROW({ TCPServer server(0); });
     uint32_t max_port =

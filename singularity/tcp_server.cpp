@@ -11,7 +11,7 @@
 TCPServer::TCPServer(uint32_t port) : _port{port}, _sock_fd{-1} {
     uint32_t max_port =
         static_cast<uint32_t>(std::numeric_limits<uint16_t>::max());
-    if (_port < 0 || _port > max_port) {
+    if ( _port > max_port) {
         throw std::invalid_argument(build_string("Invalid port number ", port,
                                                  ", expected in range [0,",
                                                  max_port, "]"));
