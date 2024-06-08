@@ -1,21 +1,34 @@
 #include "tcp_server.hpp"
 
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <system_error>
 
 #include "utils.hpp"
 
-TCPServer::TCPServer(uint32_t port) : _port{port}, _sock_fd{-1} {
-    uint32_t max_port =
-        static_cast<uint32_t>(std::numeric_limits<uint16_t>::max());
-    if ( _port > max_port) {
-        throw std::invalid_argument(build_string("Invalid port number ", port,
-                                                 ", expected in range [0,",
-                                                 max_port, "]"));
+constexpr static uint32_t MAX_PORT_NUM =
+    static_cast<uint32_t>(std::numeric_limits<uint16_t>::max());
+
+TCPServer::TCPServer(uint32_t port) : _socket{std::nullopt} {
+    if (port > MAX_PORT_NUM) {
+        std::string error_message =
+            build_string("Invalid port number ", port,
+                         ", expected in range [0,", MAX_PORT_NUM, "]");
+        throw std::invalid_argument(error_message);
+    } else {
+        _port = static_cast<uint16_t>(port);
     }
 }
 
-TCPServer::~TCPServer() { close(_sock_fd); }
+void TCPServer::start(int max_connections) {
+    _socket = TCPSocket();
+
+    IPSocketAddress address(INADDR_ANY, _port);
+    _socket->bind_address(address);
+    _socket->start_listen(max_connections);
+}

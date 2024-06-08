@@ -28,9 +28,18 @@ endif()
 add_executable(singularity singularity/main.cpp)
 
 enable_testing()
-add_executable(tcp_server_test singularity/tcp_server.test.cpp singularity/tcp_server.cpp)
+add_executable(tcp_server_test 
+               singularity/tcp_server.test.cpp
+               singularity/tcp_server.cpp
+               singularity/sockimpl.cpp
+)
 target_include_directories(tcp_server_test PRIVATE singularity)
 target_link_libraries(tcp_server_test GTest::gtest_main)
 
+add_executable(sockimpl_test singularity/sockimpl.test.cpp singularity/sockimpl.cpp)
+target_include_directories(sockimpl_test PRIVATE singularity)
+target_link_libraries(sockimpl_test GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(tcp_server_test)
+gtest_discover_tests(sockimpl_test)
