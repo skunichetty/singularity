@@ -3,6 +3,9 @@
 #define TCP_SERVER_H
 
 #include <cstdint>
+#include <optional>
+
+#include "sockimpl.hpp"
 
 using socket_t = int;
 
@@ -12,8 +15,8 @@ using socket_t = int;
  */
 class TCPServer {
    private:
-    uint32_t _port;     // The port number on which the server listens.
-    socket_t _sock_fd;  // The socket file descriptor used by the server.
+    uint16_t _port;  // The port number on which the server listens.
+    std::optional<TCPSocket> _socket;
 
    public:
     /**
@@ -24,23 +27,12 @@ class TCPServer {
     TCPServer(uint32_t port);
 
     /**
-     * @brief Destroys the TCPServer object.
+     * Starts the TCP server with the specified maximum number of connections.
+     *
+     * @param max_connections The maximum number of connections allowed by the
+     * server.
      */
-    ~TCPServer();
-
-    /**
-     * @brief Starts the TCP server, making it ready to accept incoming
-     * connections.
-     */
-    void start();
-
-    /**
-     * @brief Accepts an incoming connection from a client.
-     * @param block Specifies whether the function should block until a
-     * connection is accepted.
-     * @return The socket file descriptor of the accepted connection.
-     */
-    socket_t accept(bool block);
+    void start(int max_connections);
 };
 
 #endif  // TCP_SERVER_H
