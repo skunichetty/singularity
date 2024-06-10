@@ -16,7 +16,6 @@ using socket_t = int;
 class TCPServer {
    private:
     uint16_t _port;  // The port number on which the server listens.
-    std::optional<TCPSocket> _socket;
 
    public:
     /**
