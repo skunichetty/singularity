@@ -14,7 +14,7 @@
 constexpr static uint32_t MAX_PORT_NUM =
     static_cast<uint32_t>(std::numeric_limits<uint16_t>::max());
 
-TCPServer::TCPServer(uint32_t port) : _socket{std::nullopt} {
+TCPServer::TCPServer(uint32_t port) {
     if (port > MAX_PORT_NUM) {
         std::string error_message =
             build_string("Invalid port number ", port,
@@ -25,10 +25,3 @@ TCPServer::TCPServer(uint32_t port) : _socket{std::nullopt} {
     }
 }
 
-void TCPServer::start(int max_connections) {
-    _socket = TCPSocket();
-
-    IPSocketAddress address(INADDR_ANY, _port);
-    _socket->bind_address(address);
-    _socket->start_listen(max_connections);
-}

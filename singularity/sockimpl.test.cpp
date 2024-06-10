@@ -24,10 +24,13 @@ TEST(IPSocketAddressImplTest, IPPortConversions) {
 }
 
 TEST(IPSocketAddressImplTest, IPCharAddressConversion) {
-    IPSocketAddress addr("127.0.0.1", 3000);
+    IPSocketAddress addr("178.234.41.239", 3000);
+
     uint32_t intaddr = addr.address();
     in_addr temp;
     temp.s_addr = htonl(intaddr);
     char* straddr = inet_ntoa(temp);
+
     EXPECT_STREQ(straddr, addr.address_str().c_str());
 }
+

@@ -9,10 +9,9 @@
 
 #include "utils.hpp"
 
-static std::system_error get_syserr() {
-    return std::system_error(errno, std::system_category(),
-                             "Error starting TCP server");
-}
+constexpr size_t MIN_BUFFER_SIZE = 256;
+constexpr size_t BUFFER_EPSILON = 32;
+
 
 sa_family_t SocketAddress::sa_family() const { return _address.ss_family; }
 socklen_t SocketAddress::length() const { return sizeof(_address); }
@@ -55,38 +54,114 @@ uint32_t IPSocketAddress::address() const {
 }
 
 std::string IPSocketAddress::address_str() const {
-    auto buffer = std::make_unique<char[]>(INET_ADDRSTRLEN);
-    inet_ntop(AF_INET, &(_ip_addr->sin_addr.s_addr), buffer.get(),
-              INET_ADDRSTRLEN);
-    std::string string_address(buffer.get());
-    return string_address;
+    char buffer[INET_ADDRSTRLEN] = {0};
+    const char* str = inet_ntop(AF_INET, &(_ip_addr->sin_addr), buffer, INET_ADDRSTRLEN);
+    if(str == NULL){
+        throw std::system_error(errno, std::system_category(), "Unable to construct string IP address");
+    }
+    return std::string(buffer);
 }
 
 uint16_t IPSocketAddress::port() const { return ntohs(_ip_addr->sin_port); }
 
-TCPSocket::TCPSocket() : _socket{socket(AF_INET, SOCK_STREAM, 0)} {}
-
-void TCPSocket::bind_address(const IPSocketAddress& info) {
-    int bind_status = bind(_socket, info.data(), info.length());
-    if (bind_status == -1) throw get_syserr();
+MessageBuffer::MessageBuffer(void* data, size_t datasize) : _length{datasize} {
+    _data.reset(new std::byte[datasize]);
+    memcpy(_data.get(), data, datasize);
 }
 
-void TCPSocket::start_listen(int max_connections) {
-    int listen_status = listen(_socket, max_connections);
-    if (listen_status == -1) throw get_syserr();
+const std::byte* MessageBuffer::raw() const {
+    return _data.get();
 }
 
-std::pair<socket_t, IPSocketAddress> TCPSocket::accept_ctx() {
-    sockaddr_in client_addr;
-    socklen_t addrlen = sizeof(client_addr);
-    sockaddr* addr_ptr = reinterpret_cast<sockaddr*>(&client_addr);
-
-    socket_t ctx = accept(_socket, addr_ptr, &addrlen);
-    if (ctx == -1) throw get_syserr();
-
-    return std::make_pair(ctx, IPSocketAddress(addr_ptr, addrlen));
+size_t MessageBuffer::length() const {
+    return _length;
 }
 
-void TCPSocket::disconnect() { close(_socket); }
+TCPConnection::TCPConnection(socket_t sock_fd, const IPSocketAddress& client_address): _socket{sock_fd}, _address{client_address} {}
 
-TCPSocket::~TCPSocket() { close(_socket); }
+TCPConnection::TCPConnection(const IPSocketAddress& server_address) : _socket{std::nullopt}, _address{server_address} {}
+
+void TCPConnection::open() {
+    if(!_socket.has_value()){
+        _socket = socket(AF_INET, SOCK_STREAM, 0);
+        int status = connect(*_socket, _address.data(), _address.length());
+        if(status == -1) {
+            throw std::system_error(
+                errno,
+                std::system_category(),
+                "Unable to open TCP connection"
+            );
+        }
+    }
+}
+
+void TCPConnection::terminate() {
+    if(_socket.has_value()){
+        close(*_socket);
+        _socket.reset();
+    }
+}
+
+bool TCPConnection::active() const {
+    return _socket.has_value();
+}
+
+void TCPConnection::send_message(const MessageBuffer& buffer){
+    const std::byte* next_byte = buffer.raw();
+    size_t remaining_bytes = buffer.length();
+    ssize_t bytes_sent = 0;
+
+    do {
+        bytes_sent = send(*_socket, next_byte, remaining_bytes, 0);
+
+        if(bytes_sent == -1){
+            throw std::system_error(
+                errno,
+                std::system_category(),
+                "Failure to send message"
+            );
+        } 
+
+        auto offset = static_cast<size_t>(bytes_sent);
+        remaining_bytes -= offset;
+        next_byte += offset; 
+    } while(remaining_bytes > 0);
+}
+
+MessageBuffer TCPConnection::receive_message() {
+    auto buffer = std::make_unique<std::byte[]>(MIN_BUFFER_SIZE);
+    size_t buffer_capacity = MIN_BUFFER_SIZE;
+
+    std::byte* next_byte = buffer.get();
+    size_t bytes_written = 0;
+    ssize_t bytes_received = 0;
+    
+    do{
+        bytes_received = recv(*_socket, next_byte, MIN_BUFFER_SIZE - bytes_written, 0);
+
+        if(bytes_received == -1){
+            throw std::system_error(
+                errno,
+                std::system_category(),
+                "Error in receiving message"
+            );
+        }
+
+        auto offset = static_cast<size_t>(bytes_received);
+        bytes_written += offset;
+        next_byte += offset;
+
+        if(bytes_written + BUFFER_EPSILON >= buffer_capacity){
+            // grow buffer eagerly in anticipation of more data
+
+            // NOTE: we can dynamically tune epsilon in response 
+            // to stream patterns for performance. Not necessary atm though.
+            auto copy = std::make_unique<std::byte[]>(buffer_capacity * 2);
+            memcpy(copy.get(), buffer.get(), bytes_written);
+            buffer.swap(copy);
+            buffer_capacity *= 2;
+        }
+    } while (bytes_received != 0);
+
+    return MessageBuffer(buffer.get(), bytes_written);
+}
