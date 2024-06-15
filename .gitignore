@@ -5,3 +5,4 @@ build
 
 # editor configuration
 .vscode
+.idea
