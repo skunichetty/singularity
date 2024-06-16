@@ -2,12 +2,17 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <chrono>
 #include <ostream>
 #include <sstream>
 #include <string>
 
 template <typename T>
 concept StreamInsertable = requires(T a, std::ostream os) { os << a; };
+
+template <typename T>
+concept IsDuration =
+    requires(T a) { std::chrono::duration_cast<std::chrono::seconds>(a); };
 
 template <typename Arg>
     requires StreamInsertable<Arg>
