@@ -10,6 +10,8 @@
 #include "sockimpl.hpp"
 #include "utils.hpp"
 
+namespace singularity::network {
+
 /**
  * @brief The TCPServer class represents a TCP server that listens for incoming
  * connections on a specified port.
@@ -39,11 +41,13 @@ class TCPServer {
     void start(int max_queued_connections);
 
     template <typename DurationType>
-        requires IsDuration<DurationType>
+        requires concepts::IsDuration<DurationType>
     TCPConnection accept_connection(
         std::optional<DurationType> timeout = std::nullopt);
 
     void shutdown();
 };
+
+}  // namespace singularity::network
 
 #endif  // TCP_SERVER_H

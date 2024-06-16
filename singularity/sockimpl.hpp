@@ -11,6 +11,8 @@
 #include <optional>
 #include <string>
 
+namespace singularity::network {
+
 using socket_t = int;
 
 /**
@@ -23,7 +25,7 @@ using socket_t = int;
 class SocketAddress {
    protected:
     sockaddr_storage _address;
-    SocketAddress() = default;
+    SocketAddress();
 
    public:
     [[nodiscard]] sa_family_t sa_family() const;
@@ -209,11 +211,13 @@ class InactiveConnectionError : public std::exception {
     std::string _message;
 
    public:
-    InactiveConnectionError(const std::string& prefix);
-    InactiveConnectionError(const char* prefix);
+    explicit InactiveConnectionError(const std::string& prefix);
+    explicit InactiveConnectionError(const char* prefix);
     InactiveConnectionError(const InactiveConnectionError& other) = default;
 
-    const char* what() const noexcept override;
+    [[nodiscard]] const char* what() const noexcept override;
 };
+
+}  // namespace singularity::network
 
 #endif  // SOCKET_IMPL_H

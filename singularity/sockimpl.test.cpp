@@ -11,6 +11,8 @@
 
 #include "arpa/inet.h"
 
+using namespace singularity::network;
+
 constexpr uint16_t PORT = 32322;
 
 // Test fixture that creates and runs a server that accepts a fixed number of

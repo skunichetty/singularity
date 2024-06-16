@@ -10,8 +10,12 @@
 
 #include "utils.hpp"
 
+using namespace singularity::network;
+
 constexpr size_t MIN_BUFFER_SIZE = 1024;
 constexpr size_t BUFFER_EPSILON = 32;
+
+SocketAddress::SocketAddress() : _address{} {}
 
 sa_family_t SocketAddress::sa_family() const { return _address.ss_family; }
 socklen_t SocketAddress::length() const { return sizeof(_address); }
@@ -34,7 +38,8 @@ IPSocketAddress::IPSocketAddress(const char* address, uint16_t port)
     _ip_addr->sin_port = htons(port);
 
     if (inet_aton(address, &(_ip_addr->sin_addr)) == 0) {
-        std::string error_msg = build_string("Invalid address: ", address);
+        std::string error_msg =
+            utils::build_string("Invalid address: ", address);
         throw std::invalid_argument(error_msg);
     }
 
@@ -81,15 +86,15 @@ MessageBuffer::MessageBuffer(const void* data, size_t datasize)
 }
 
 MessageBuffer MessageBuffer::from_string(const std::string& message) {
-    return MessageBuffer(message.data(), message.length() + 1);
+    return {message.data(), message.length() + 1};
 }
 
 MessageBuffer MessageBuffer::from_string(std::string_view message) {
-    return MessageBuffer(message.data(), message.length() + 1);
+    return {message.data(), message.length() + 1};
 }
 
 MessageBuffer MessageBuffer::from_string(const char* message) {
-    return MessageBuffer(message, strlen(message) + 1);
+    return {message, strlen(message) + 1};
 }
 
 const std::byte* MessageBuffer::raw() const { return _data.get(); }
@@ -214,7 +219,7 @@ MessageBuffer TCPConnection::receive_message() {
 }
 
 std::string create_error(const char* prefix) {
-    return build_string(prefix, ": connection is inactive");
+    return singularity::utils::build_string(prefix, ": connection is inactive");
 }
 
 InactiveConnectionError::InactiveConnectionError(const std::string& prefix)
