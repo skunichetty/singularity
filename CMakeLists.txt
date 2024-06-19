@@ -22,7 +22,7 @@ if(NOT MSVC)
 endif()
 
 if(CMAKE_CXX_COMPILE_ID STREQUAL "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -fsanitize=integer")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
 
 add_executable(singularity singularity/main.cpp)
@@ -41,3 +41,6 @@ target_link_libraries(concurrency_test GTest::gtest_main)
 include(GoogleTest)
 gtest_discover_tests(concurrency_test)
 gtest_discover_tests(sockimpl_test)
+
+add_executable(buffer_performance test/buffer_performance.cpp)
+target_include_directories(buffer_performance PRIVATE singularity)

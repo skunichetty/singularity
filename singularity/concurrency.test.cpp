@@ -132,6 +132,20 @@ TEST(FixedBufferTest, SimpleTest) {
     }
 }
 
+TEST(FixedBufferTest, TimeoutPop) {
+    concurrency::FixedBuffer<int, 3> buffer;
+    auto elt = buffer.pop(std::chrono::milliseconds(10));
+    EXPECT_EQ(elt, std::nullopt);
+}
+
+TEST(FixedBufferTest, TimeoutPush) {
+    concurrency::FixedBuffer<int, 3> buffer;
+    buffer.push(1);
+    buffer.push(2);
+    buffer.push(3);
+    EXPECT_FALSE(buffer.push(4, std::chrono::milliseconds(10)));
+}
+
 TEST(FixedBufferTest, MultithreadedTest) {
     concurrency::FixedBuffer<int, 1000> queue;
 

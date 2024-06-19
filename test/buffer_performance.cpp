@@ -15,7 +15,7 @@ struct TestStruct {
 };
 
 int main() {
-    singularity::concurrency::FixedBuffer<TestStruct, 10000> buffer;
+    singularity::concurrency::FixedBuffer<TestStruct, 1000> buffer;
 
     std::vector<std::thread> producers(NUM_PRODUCERS);
     for (size_t index = 0; index < NUM_PRODUCERS; ++index) {
@@ -35,6 +35,17 @@ int main() {
             }
         });
     }
+
+    std::thread sizePrinter([&buffer]() {
+        auto startTime = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - startTime <
+               std::chrono::seconds(7)) {
+            std::cout << "Buffer size: " << buffer.size() << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        }
+    });
+
+    sizePrinter.join();
 
     for (auto& thread : producers) {
         if (thread.joinable()) {

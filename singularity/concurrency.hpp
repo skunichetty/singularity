@@ -10,24 +10,30 @@
 
 namespace singularity::concurrency {
 
+/**
+ * @brief A dynamic buffer class that supports concurrent push and pop
+ * operations.
+ *
+ * The DynamicBuffer class provides a thread-safe implementation of a dynamic
+ * buffer, allowing elements to be pushed and popped concurrently. The buffer
+ * grows dynamically with inputs, but threads will block if the buffer is empty.
+ *
+ * @tparam T The type of elements stored in the buffer.
+ */
 template <typename T>
 class DynamicBuffer {
    private:
     T* _storage;
     size_t _size;
     size_t _capacity;
-
     size_t _start;
     size_t _end;
-
     std::mutex _access;
     std::condition_variable _pop;
 
     void _grow() {
-        // critical - this function does not assume mutual exclusion
         T* copy = new T[_capacity * 2];
 
-        // manual unwind of _start and _end pointers
         for (size_t index = 0; index < _capacity; ++index) {
             copy[index] = std::move(_storage[(_start + index) % _capacity]);
         }
@@ -51,6 +57,7 @@ class DynamicBuffer {
         _storage = new T[_capacity];
         memcpy(_storage, other._storage, other._size * sizeof(T));
     }
+
     DynamicBuffer& operator=(const DynamicBuffer& other) {
         return *this = DynamicBuffer(other);
     }
@@ -60,6 +67,15 @@ class DynamicBuffer {
 
     ~DynamicBuffer() { delete[] _storage; }
 
+    /**
+     * @brief Pushes an element into the buffer.
+     *
+     * Adds a new element to the buffer. If the buffer is full, it will be
+     * automatically resized to accommodate the new element. This operation is
+     * thread-safe.
+     *
+     * @param object The element to be pushed into the buffer.
+     */
     void push(T&& object) {
         std::unique_lock<std::mutex> lock(_access);
 
@@ -71,6 +87,15 @@ class DynamicBuffer {
         _pop.notify_one();
     }
 
+    /**
+     * @brief Pops an element from the buffer.
+     *
+     * Removes and returns the first element from the buffer. If the buffer is
+     * empty, the calling thread will be blocked until an element becomes
+     * available. This operation is thread-safe.
+     *
+     * @return The first element in the buffer.
+     */
     T pop() {
         std::unique_lock<std::mutex> lock(_access);
         if (_size == 0) _pop.wait(lock);
@@ -80,28 +105,58 @@ class DynamicBuffer {
         return item;
     }
 
+    /**
+     * @brief Returns the current number of elements in the buffer.
+     *
+     * This operation is thread-safe.
+     *
+     * @return The number of elements in the buffer.
+     */
     [[nodiscard]] size_t size() {
         std::unique_lock<std::mutex> lock(_access);
         return _size;
     }
+
+    /**
+     * @brief Checks if the buffer is empty.
+     *
+     * This operation is thread-safe.
+     *
+     * @return True if the buffer is empty, false otherwise.
+     */
     [[nodiscard]] bool empty() {
         std::unique_lock<std::mutex> lock(_access);
         return _size == 0;
     }
 };
 
+/**
+ * @brief A fixed-size buffer implementation for storing elements of type T.
+ *
+ * This implementation is thread-safe, and threads will block when unable to
+ * push or pop an element from the buffer
+ *
+ * @tparam T The type of elements to be stored in the buffer.
+ * @tparam buffer_size The maximum number of elements that can be stored in the
+ * buffer.
+ */
 template <typename T, size_t buffer_size>
 class FixedBuffer {
    private:
     T _storage[buffer_size];
     size_t _size;
-
     size_t _start;
     size_t _end;
-
     std::mutex _data_mutex;
     std::condition_variable _wait_push;
     std::condition_variable _wait_pop;
+
+    void _push(T&& object) {
+        _storage[_end] = std::move(object);
+        ++_size;
+        _end = (_end + 1) % buffer_size;
+        _wait_push.notify_one();
+    }
 
    public:
     FixedBuffer() : _size{0}, _start{0}, _end{0} {
@@ -112,6 +167,7 @@ class FixedBuffer {
         : _size{other.size}, _start{other.start}, _end{other.end} {
         memcpy(_storage, other._storage, other._size * sizeof(T));
     }
+
     FixedBuffer& operator=(const FixedBuffer& other) {
         return *this = FixedBuffer(other);
     }
@@ -119,31 +175,104 @@ class FixedBuffer {
     FixedBuffer(FixedBuffer&& other) = default;
     FixedBuffer& operator=(FixedBuffer&& other) = default;
 
+    /**
+     * @brief Pushes an element into the buffer.
+     *
+     * If the buffer is full, the calling thread will wait until space becomes
+     * available.
+     *
+     * @param object The element to be pushed into the buffer.
+     */
     void push(T&& object) {
         std::unique_lock<std::mutex> lock(_data_mutex);
-        while (_size == buffer_size) _wait_pop.wait(lock);
-        _storage[_end] = std::forward<T>(object);
-        ++_size;
-        _end = (_end + 1) % buffer_size;
-        _wait_push.notify_all();
+        _push(std::forward<T>(object));
     }
 
+    /**
+     * @brief Pushes an element the buffer with a timeout.
+     *
+     * This function pushes the specified element into the buffer with a
+     * timeout. It waits until there is space available in the buffer or the
+     * timeout expires.
+     *
+     * @param object The element to be pushed into the buffer.
+     * @param timeout The maximum duration to wait for space in the buffer.
+     * @return `true` if the element was successfully pushed into the buffer,
+     * `false` if the timeout expired before space became available.
+     */
+    bool push(T&& object, std::chrono::nanoseconds timeout) {
+        std::unique_lock<std::mutex> lock(_data_mutex);
+
+        auto status = _wait_pop.wait_for(
+            lock, timeout, [this]() { return _size < buffer_size; });
+        if (!status) return false;
+
+        _push(std::forward<T>(object));
+        return true;
+    }
+
+     /**
+     * @brief Pops an element from the buffer.
+     *
+     * If the buffer is empty, the calling thread will wait until an element
+     * becomes available.
+     *
+     * @return The element popped from the buffer.
+     */
     T pop() {
         std::unique_lock<std::mutex> lock(_data_mutex);
-        while (_size == 0) _wait_push.wait(lock);
+        _wait_push.wait(lock, [this]() { return _size > 0; });
         T object = std::move(_storage[_start]);
         --_size;
-
         _start = (_start + 1) % buffer_size;
         _wait_pop.notify_all();
         return object;
     }
 
+    /**
+     * @brief Pops an element from the buffer with a timeout.
+     *
+     * If the buffer is empty, the function will wait for a specified timeout
+     * duration for an element to be available. If no element becomes available
+     * within the timeout duration, the function returns std::nullopt.
+     *
+     * @param timeout The maximum duration to wait for an element to become
+     * available.
+     * @return An optional containing the removed element, or std::nullopt if
+     * the buffer is empty and the timeout expires.
+     */
+    std::optional<T> pop(std::chrono::nanoseconds timeout) {
+        std::unique_lock<std::mutex> lock(_data_mutex);
+        auto status =
+            _wait_push.wait_for(lock, timeout, [this]() { return _size > 0; });
+        if (!status) return std::nullopt;
+
+        T object = std::move(_storage[_start]);
+        --_size;
+        _start = (_start + 1) % buffer_size;
+        _wait_pop.notify_all();
+        return object;
+    }
+
+    /**
+     * @brief Returns the current number of elements in the buffer.
+     *
+     * This operation is thread-safe.
+     *
+     * @return The number of elements in the buffer.
+     */
     [[nodiscard]] size_t size() {
         std::unique_lock<std::mutex> lock(_data_mutex);
         return _size;
     }
 
+    /**
+     * @brief Checks if the buffer is empty.
+     *
+     * This operation is thread-safe.
+     *
+     * @return True if the buffer is empty, false otherwise.
+     */
     [[nodiscard]] bool empty() {
         std::unique_lock<std::mutex> lock(_data_mutex);
         return _size == 0;

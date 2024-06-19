@@ -26,6 +26,7 @@ concept IsMutex = !std::movable<T> && !std::copyable<T> && requires(T mutex) {
 };
 
 }  // namespace concepts
+
 template <typename Arg>
     requires concepts::StreamInsertable<Arg>
 void _build_string(std::ostringstream& os, Arg&& arg) {
