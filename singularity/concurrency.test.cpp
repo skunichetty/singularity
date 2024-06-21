@@ -116,11 +116,11 @@ TEST(FixedBufferTest, SimpleTest) {
     buffer.push(3);
     EXPECT_EQ(buffer.size(), 3);
 
-    buffer.pop();
+    EXPECT_EQ(1, buffer.pop());
     buffer.push(4);
-    buffer.pop();
+    EXPECT_EQ(2, buffer.pop());
     buffer.push(5);
-    buffer.pop();
+    EXPECT_EQ(3, buffer.pop());
     buffer.push(6);
 
     EXPECT_EQ(buffer.size(), 3);

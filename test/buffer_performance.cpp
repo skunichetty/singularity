@@ -20,8 +20,9 @@ int main() {
     std::vector<std::thread> producers(NUM_PRODUCERS);
     for (size_t index = 0; index < NUM_PRODUCERS; ++index) {
         producers.emplace_back([&buffer]() {
-            for (int i = 0; i < TOTAL_ITEMS / NUM_PRODUCERS; i++) {
-                buffer.push({i % 2 == 0, i, 3.14 - i + 40});
+            for (size_t i = 0; i < TOTAL_ITEMS / NUM_PRODUCERS; i++) {
+                buffer.push({i % 2 == 0, static_cast<int>(i),
+                             static_cast<double>(i + 40) + 3.14});
             }
         });
     }
@@ -29,23 +30,12 @@ int main() {
     std::vector<std::thread> consumers(NUM_CONSUMERS);
     for (size_t index = 0; index < NUM_CONSUMERS; ++index) {
         consumers.emplace_back([&buffer]() {
-            for (int i = 0; i < TOTAL_ITEMS / NUM_CONSUMERS; i++) {
+            for (size_t i = 0; i < TOTAL_ITEMS / NUM_CONSUMERS; i++) {
                 auto x = buffer.pop();
                 x.hello += 1;
             }
         });
     }
-
-    std::thread sizePrinter([&buffer]() {
-        auto startTime = std::chrono::steady_clock::now();
-        while (std::chrono::steady_clock::now() - startTime <
-               std::chrono::seconds(7)) {
-            std::cout << "Buffer size: " << buffer.size() << std::endl;
-            std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        }
-    });
-
-    sizePrinter.join();
 
     for (auto& thread : producers) {
         if (thread.joinable()) {
@@ -58,6 +48,4 @@ int main() {
             thread.join();
         }
     }
-
-    std::cout << (buffer.size()) << std::endl;
 }

@@ -3,12 +3,22 @@
 #define CONCURRENCY_HPP
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <queue>
+#include <thread>
 
 #include "utils.hpp"
 
 namespace singularity::concurrency {
+
+template <typename T>
+class Buffer {
+    virtual void push(T&& object) = 0;
+    virtual T pop() = 0;
+    [[nodiscard]] virtual size_t size() const = 0;
+    [[nodiscard]] virtual bool empty() const = 0;
+};
 
 /**
  * @brief A dynamic buffer class that supports concurrent push and pop
@@ -21,32 +31,35 @@ namespace singularity::concurrency {
  * @tparam T The type of elements stored in the buffer.
  */
 template <typename T>
-class DynamicBuffer {
+class DynamicBuffer : public Buffer<T> {
    private:
     T* _storage;
+    std::allocator<T> _allocator;
+
     size_t _size;
     size_t _capacity;
     size_t _start;
     size_t _end;
-    std::mutex _access;
-    std::condition_variable _pop;
+
+    mutable std::mutex _access;
+    mutable std::condition_variable _pop;
 
     void _grow() {
-        T* copy = new T[_capacity * 2];
+        T* copy = _allocator.allocate(_capacity * 2);
 
         for (size_t index = 0; index < _capacity; ++index) {
             copy[index] = std::move(_storage[(_start + index) % _capacity]);
         }
 
         std::swap(copy, _storage);
-        delete[] copy;
+        _allocator.deallocate(copy, _capacity);
 
         _capacity *= 2;
     }
 
    public:
     DynamicBuffer() : _size{0}, _capacity{8}, _start{0}, _end{0} {
-        _storage = new T[_capacity];
+        _storage = _allocator.allocate(_capacity);
     }
 
     DynamicBuffer(const DynamicBuffer& other)
@@ -54,18 +67,18 @@ class DynamicBuffer {
           _capacity{other._capacity},
           _start{other.start},
           _end{other.end} {
-        _storage = new T[_capacity];
+        _storage = _allocator.allocate(_capacity);
         memcpy(_storage, other._storage, other._size * sizeof(T));
     }
 
     DynamicBuffer& operator=(const DynamicBuffer& other) {
-        return *this = DynamicBuffer(other);
+        return (*this = DynamicBuffer(other));
     }
 
     DynamicBuffer(DynamicBuffer&& other) = default;
     DynamicBuffer& operator=(DynamicBuffer&& other) = default;
 
-    ~DynamicBuffer() { delete[] _storage; }
+    ~DynamicBuffer() { _allocator.deallocate(_storage, _capacity); }
 
     /**
      * @brief Pushes an element into the buffer.
@@ -76,7 +89,7 @@ class DynamicBuffer {
      *
      * @param object The element to be pushed into the buffer.
      */
-    void push(T&& object) {
+    void push(T&& object) override {
         std::unique_lock<std::mutex> lock(_access);
 
         if (_size == _capacity) _grow();
@@ -96,11 +109,11 @@ class DynamicBuffer {
      *
      * @return The first element in the buffer.
      */
-    T pop() {
+    T pop() override {
         std::unique_lock<std::mutex> lock(_access);
         if (_size == 0) _pop.wait(lock);
         T item = std::move(_storage[_start]);
-        _start = ++_start % _capacity;
+        _start = (_start + 1) % _capacity;
         --_size;
         return item;
     }
@@ -112,7 +125,7 @@ class DynamicBuffer {
      *
      * @return The number of elements in the buffer.
      */
-    [[nodiscard]] size_t size() {
+    [[nodiscard]] size_t size() const override {
         std::unique_lock<std::mutex> lock(_access);
         return _size;
     }
@@ -124,7 +137,7 @@ class DynamicBuffer {
      *
      * @return True if the buffer is empty, false otherwise.
      */
-    [[nodiscard]] bool empty() {
+    [[nodiscard]] bool empty() const override {
         std::unique_lock<std::mutex> lock(_access);
         return _size == 0;
     }
@@ -141,15 +154,18 @@ class DynamicBuffer {
  * buffer.
  */
 template <typename T, size_t buffer_size>
-class FixedBuffer {
+class FixedBuffer : public Buffer<T> {
    private:
-    T _storage[buffer_size];
+    T* _storage;
+    std::allocator<T> _allocator;
+
     size_t _size;
     size_t _start;
     size_t _end;
-    std::mutex _data_mutex;
-    std::condition_variable _wait_push;
-    std::condition_variable _wait_pop;
+
+    mutable std::mutex _data_mutex;
+    mutable std::condition_variable _wait_push;
+    mutable std::condition_variable _wait_pop;
 
     void _push(T&& object) {
         _storage[_end] = std::move(object);
@@ -158,22 +174,34 @@ class FixedBuffer {
         _wait_push.notify_one();
     }
 
+    T _pop() {
+        T object = std::move(_storage[_start]);
+        --_size;
+        _start = (_start + 1) % buffer_size;
+        _wait_pop.notify_one();
+        return object;
+    }
+
    public:
     FixedBuffer() : _size{0}, _start{0}, _end{0} {
         static_assert(buffer_size > 0, "Buffer size must be greater than 0.");
+        _storage = _allocator.allocate(buffer_size);
     }
 
     FixedBuffer(const FixedBuffer& other)
         : _size{other.size}, _start{other.start}, _end{other.end} {
+        _storage = _allocator.allocate(buffer_size);
         memcpy(_storage, other._storage, other._size * sizeof(T));
     }
 
     FixedBuffer& operator=(const FixedBuffer& other) {
-        return *this = FixedBuffer(other);
+        return (*this = FixedBuffer(other));
     }
 
     FixedBuffer(FixedBuffer&& other) = default;
     FixedBuffer& operator=(FixedBuffer&& other) = default;
+
+    ~FixedBuffer() { _allocator.deallocate(_storage, buffer_size); }
 
     /**
      * @brief Pushes an element into the buffer.
@@ -183,7 +211,7 @@ class FixedBuffer {
      *
      * @param object The element to be pushed into the buffer.
      */
-    void push(T&& object) {
+    void push(T&& object) override {
         std::unique_lock<std::mutex> lock(_data_mutex);
         _push(std::forward<T>(object));
     }
@@ -211,7 +239,7 @@ class FixedBuffer {
         return true;
     }
 
-     /**
+    /**
      * @brief Pops an element from the buffer.
      *
      * If the buffer is empty, the calling thread will wait until an element
@@ -219,14 +247,10 @@ class FixedBuffer {
      *
      * @return The element popped from the buffer.
      */
-    T pop() {
+    T pop() override {
         std::unique_lock<std::mutex> lock(_data_mutex);
         _wait_push.wait(lock, [this]() { return _size > 0; });
-        T object = std::move(_storage[_start]);
-        --_size;
-        _start = (_start + 1) % buffer_size;
-        _wait_pop.notify_all();
-        return object;
+        return _pop();
     }
 
     /**
@@ -246,12 +270,7 @@ class FixedBuffer {
         auto status =
             _wait_push.wait_for(lock, timeout, [this]() { return _size > 0; });
         if (!status) return std::nullopt;
-
-        T object = std::move(_storage[_start]);
-        --_size;
-        _start = (_start + 1) % buffer_size;
-        _wait_pop.notify_all();
-        return object;
+        return _pop();
     }
 
     /**
@@ -261,7 +280,7 @@ class FixedBuffer {
      *
      * @return The number of elements in the buffer.
      */
-    [[nodiscard]] size_t size() {
+    [[nodiscard]] size_t size() const override {
         std::unique_lock<std::mutex> lock(_data_mutex);
         return _size;
     }
@@ -273,7 +292,7 @@ class FixedBuffer {
      *
      * @return True if the buffer is empty, false otherwise.
      */
-    [[nodiscard]] bool empty() {
+    [[nodiscard]] bool empty() const override {
         std::unique_lock<std::mutex> lock(_data_mutex);
         return _size == 0;
     }
