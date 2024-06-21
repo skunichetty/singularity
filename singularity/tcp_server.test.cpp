@@ -1,15 +1,21 @@
 #include "tcp_server.hpp"
 
 #include <gtest/gtest.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
-#include <limits>
+#include <array>
+#include <thread>
+#include <vector>
 
-TEST(TCPServerTest, TCPServerPortConstruction) {
-    EXPECT_THROW({ TCPServer server(23487293); }, std::invalid_argument);
-    EXPECT_NO_THROW({ TCPServer server(0); });
-    uint32_t max_port =
-        static_cast<uint32_t>(std::numeric_limits<uint16_t>::max());
-    EXPECT_NO_THROW({ TCPServer server(max_port); });
+#include "concurrency.hpp"
+
+using namespace singularity;
+
+constexpr size_t PORT = 10202;
+
+TEST(TCPServerTest, BasicConnectivityTest) {
+    network::TCPServer server(PORT);
+    concurrency::FixedBuffer<network::TCPConnection, 30> connection_buffer;
+
+    server.start(connection_buffer);
+    server.shutdown();
 }

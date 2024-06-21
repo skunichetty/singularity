@@ -14,6 +14,7 @@ namespace singularity::concurrency {
 
 template <typename T>
 class Buffer {
+   public:
     virtual void push(T&& object) = 0;
     virtual T pop() = 0;
     [[nodiscard]] virtual size_t size() const = 0;

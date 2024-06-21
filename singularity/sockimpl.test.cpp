@@ -42,7 +42,7 @@ class TCPConnectionTest : public testing::Test {
         listen(_socket, 1);
     }
 
-    void start_server(int num_connections) {
+    void start_server(size_t num_connections) {
         runner = std::thread([this, num_connections]() {
             for (size_t index = 0; index < num_connections; ++index) {
                 sockaddr_in addr;
@@ -58,7 +58,9 @@ class TCPConnectionTest : public testing::Test {
                 do {
                     bytes_recv = recv(client_socket, buffer + total_bytes_recv,
                                       BUFFER_SIZE - total_bytes_recv, 0);
-                    if (bytes_recv == -1) ASSERT_TRUE(false);
+                    if (bytes_recv == -1) {
+                        ASSERT_TRUE(false);
+                    }
                     total_bytes_recv += static_cast<size_t>(bytes_recv);
                 } while (bytes_recv != 0 && total_bytes_recv < BUFFER_SIZE);
 
@@ -67,7 +69,9 @@ class TCPConnectionTest : public testing::Test {
                 do {
                     bytes_sent = send(client_socket, buffer + total_bytes_sent,
                                       total_bytes_recv - total_bytes_sent, 0);
-                    if (bytes_sent == -1) ASSERT_TRUE(false);
+                    if (bytes_sent == -1) {
+                        ASSERT_TRUE(false);
+                    }
                     total_bytes_sent += static_cast<size_t>(bytes_sent);
                 } while (total_bytes_sent < total_bytes_recv);
 
@@ -92,7 +96,7 @@ class TCPConnectionTest : public testing::Test {
 
 TEST(IPSocketAddressImplTest, IPCharAddressCreation) {
     IPSocketAddress addr("127.0.0.1", 3000);
-    EXPECT_STREQ(addr.address_str().c_str(), "127.0.0.1");
+    EXPECT_STREQ(addr.string_address().c_str(), "127.0.0.1");
 
     EXPECT_THROW(
         { IPSocketAddress addr1("asdjflkjsd", 3000); }, std::invalid_argument);
@@ -114,7 +118,7 @@ TEST(IPSocketAddressImplTest, IPCharAddressConversion) {
     temp.s_addr = htonl(intaddr);
     char* straddr = inet_ntoa(temp);
 
-    EXPECT_STREQ(straddr, addr.address_str().c_str());
+    EXPECT_STREQ(straddr, addr.string_address().c_str());
 }
 
 TEST_F(TCPConnectionTest, ClientBasicLoopbackTest) {

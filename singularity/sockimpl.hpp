@@ -29,7 +29,10 @@ class SocketAddress {
 
    public:
     [[nodiscard]] sa_family_t sa_family() const;
+    [[nodiscard]] sa_family_t& sa_family();
     [[nodiscard]] virtual socklen_t length() const = 0;
+
+    [[nodiscard]] sockaddr* data();
     [[nodiscard]] const sockaddr* data() const;
 };
 
@@ -47,9 +50,10 @@ class IPSocketAddress : public SocketAddress {
     sockaddr_in* _ip_addr;
 
    public:
+    IPSocketAddress();
     IPSocketAddress(uint32_t address, uint16_t port);
     IPSocketAddress(const char* address, uint16_t port);
-    IPSocketAddress(const sockaddr* address, socklen_t addrlen);
+    IPSocketAddress(const sockaddr* address, socklen_t address_length);
 
     IPSocketAddress(const IPSocketAddress& other);
     IPSocketAddress(IPSocketAddress&& other) = default;
@@ -58,8 +62,13 @@ class IPSocketAddress : public SocketAddress {
     IPSocketAddress& operator=(IPSocketAddress&& other) = default;
 
     [[nodiscard]] uint32_t address() const;
-    [[nodiscard]] std::string address_str() const;
+    [[nodiscard]] std::string string_address() const;
+    void set_address(uint32_t address);
+    void set_address(const char* address);
+
     [[nodiscard]] uint16_t port() const;
+    void set_port(uint16_t port);
+
     [[nodiscard]] socklen_t length() const override;
 };
 
@@ -112,27 +121,24 @@ class TCPConnection {
 
    public:
     /**
-     * @brief Constructs a TCPConnection object with an existing socket and
-     * client address.
+     * @brief Constructs a TCPConnection object with the address of the socket
+     * to connect to.
      *
-     * Intended for server-side usage - for example, creating a
-     * managed connection from a client socket returned from `accept()`.
+     * @param address The IP socket address of the TCP socket to connect to.
+     */
+    explicit TCPConnection(IPSocketAddress address);
+
+    /**
+     * @brief Constructs a TCPConnection to wrap and manage an existing socket
+     * and address.
+     *
+     * Example usage - creating a managed connection from a client socket
+     * returned from `accept()` in a server-side setting.
      *
      * @param sock_fd The file descriptor of the socket.
      * @param client_address The IP socket address of the client.
      */
-    TCPConnection(socket_t sock_fd, const IPSocketAddress& client_address);
-
-    /**
-     * @brief Constructs a TCPConnection object with a server address.
-     *
-     * Intended for client-side usage - for example, creating an instance of
-     * `TCPConnection` and then calling `TCPConnection::open()` to connect to
-     * the server.
-     *
-     * @param server_address The IP socket address of the server.
-     */
-    explicit TCPConnection(const IPSocketAddress& server_address);
+    TCPConnection(socket_t sock_fd, IPSocketAddress address);
 
     /**
      * @brief Sends a message over the TCP connection.
@@ -160,7 +166,8 @@ class TCPConnection {
      * @brief Opens the TCP connection.
      *
      * If the connection is already open, this function performs no operation.
-     * Otherwise, this function attempts to connect to the address given during
+     * Otherwise, this function attempts to connect to the address given
+     during
      * construction.
      *
      * @throw std::system_error Operating system was unable to open the
@@ -171,8 +178,10 @@ class TCPConnection {
     /**
      * @brief Terminates the TCP connection.
      *
-     * If the connection is already closed, this function performs no operation.
-     * Otherwise, the connection is gracefully shutdown and associated resources
+     * If the connection is already closed, this function performs no
+     operation.
+     * Otherwise, the connection is gracefully shutdown and associated
+     resources
      * are freed.
      *
      * @throw std::system_error Operating system was unable to close the
@@ -183,7 +192,8 @@ class TCPConnection {
     /**
      * @brief Disables sending data over the TCP connection.
      *
-     * This may be necessary in client-server interactions when the server needs
+     * This may be necessary in client-server interactions when the server
+     needs
      * to know when the client is done sending information.
      *
      * @throw std::system_error Operating system was unable to perform partial

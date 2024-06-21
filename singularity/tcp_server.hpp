@@ -7,6 +7,7 @@
 #include <optional>
 #include <type_traits>
 
+#include "concurrency.hpp"
 #include "sockimpl.hpp"
 #include "utils.hpp"
 
@@ -17,10 +18,11 @@ namespace singularity::network {
  * connections on a specified port.
  */
 class TCPServer {
-   public:
+   private:
     class TCPServerImpl;
-    std::unique_ptr<TCPServerImpl> impl = nullptr;
+    std::unique_ptr<TCPServerImpl> impl;
 
+   public:
     /**
      * @brief Constructs a TCPServer object with the specified port number.
      * @param port The port number on which the server listens. Port must be in
@@ -31,21 +33,19 @@ class TCPServer {
     explicit TCPServer(uint32_t port);
 
     /**
-     * Starts the TCP server with the specified maximum number of connections.
+     * Starts the TCP server and listens to connections.
      *
-     * @param max_connections The maximum number of connections allowed by the
-     * server.
+     * Anytime a new connection is intercepted, the connection is added to the
+     * connection buffer given.
+     *
      * @throw std::system_error Thrown when system is unable to start server.
      * See error message (`what()`) for more information.
      */
-    void start(int max_queued_connections);
-
-    template <typename DurationType>
-        requires concepts::IsDuration<DurationType>
-    TCPConnection accept_connection(
-        std::optional<DurationType> timeout = std::nullopt);
+    void start(concurrency::Buffer<TCPConnection>& connection_buffer);
 
     void shutdown();
+
+    ~TCPServer();  // make the type complete
 };
 
 }  // namespace singularity::network

@@ -40,6 +40,13 @@ target_link_libraries(concurrency_test GTest::gtest_main)
 add_executable(buffer_performance test/buffer_performance.cpp)
 target_include_directories(buffer_performance PRIVATE singularity)
 
+add_executable(tcp_server_test
+        singularity/tcp_server.test.cpp
+        singularity/tcp_server.cpp
+        singularity/sockimpl.cpp)
+target_include_directories(tcp_server_test PRIVATE singularity)
+target_link_libraries(tcp_server_test GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(concurrency_test)
 gtest_discover_tests(sockimpl_test)

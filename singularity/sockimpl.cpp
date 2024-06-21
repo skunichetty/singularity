@@ -18,36 +18,39 @@ constexpr size_t BUFFER_EPSILON = 32;
 SocketAddress::SocketAddress() : _address{} {}
 
 sa_family_t SocketAddress::sa_family() const { return _address.ss_family; }
+sa_family_t& SocketAddress::sa_family() { return _address.ss_family; }
 socklen_t SocketAddress::length() const { return sizeof(_address); }
+sockaddr* SocketAddress::data() {
+    return reinterpret_cast<sockaddr*>(&_address);
+}
 const sockaddr* SocketAddress::data() const {
     return reinterpret_cast<const sockaddr*>(&_address);
 }
 
+IPSocketAddress::IPSocketAddress()
+    : _ip_addr{reinterpret_cast<sockaddr_in*>(&_address)} {
+    sa_family() = AF_INET;
+    memset(_ip_addr, 0, sizeof(sockaddr_in));
+}
 IPSocketAddress::IPSocketAddress(uint32_t address, uint16_t port)
     : _ip_addr{reinterpret_cast<sockaddr_in*>(&_address)} {
-    _ip_addr->sin_family = AF_INET;
-    _ip_addr->sin_addr.s_addr = htonl(address);
-    _ip_addr->sin_port = htons(port);
-
+    sa_family() = AF_INET;
+    set_address(address);
+    set_port(port);
     memset(_ip_addr->sin_zero, 0, sizeof(char) * 8);
 }
 
 IPSocketAddress::IPSocketAddress(const char* address, uint16_t port)
     : _ip_addr{reinterpret_cast<sockaddr_in*>(&_address)} {
-    _ip_addr->sin_family = AF_INET;
-    _ip_addr->sin_port = htons(port);
-
-    if (inet_aton(address, &(_ip_addr->sin_addr)) == 0) {
-        std::string error_msg =
-            utils::build_string("Invalid address: ", address);
-        throw std::invalid_argument(error_msg);
-    }
-
+    sa_family() = AF_INET;
+    set_address(address);
+    set_port(port);
     memset(_ip_addr->sin_zero, 0, sizeof(char) * 8);
 }
 
-IPSocketAddress::IPSocketAddress(const sockaddr* address, socklen_t addrlen) {
-    memcpy(&_address, address, addrlen);
+IPSocketAddress::IPSocketAddress(const sockaddr* address,
+                                 socklen_t address_length) {
+    memcpy(&_address, address, address_length);
 }
 
 IPSocketAddress::IPSocketAddress(const IPSocketAddress& other)
@@ -62,18 +65,34 @@ uint32_t IPSocketAddress::address() const {
     return ntohl(_ip_addr->sin_addr.s_addr);
 }
 
-std::string IPSocketAddress::address_str() const {
+std::string IPSocketAddress::string_address() const {
     char buffer[INET_ADDRSTRLEN] = {0};
     const char* str =
         inet_ntop(AF_INET, &(_ip_addr->sin_addr), buffer, INET_ADDRSTRLEN);
-    if (str == NULL) {
+    if (str == nullptr) {
         throw std::system_error(errno, std::system_category(),
                                 "Unable to construct string IP address");
     }
-    return std::string(buffer);
+    return {buffer};
+}
+
+void IPSocketAddress::set_address(uint32_t address) {
+    _ip_addr->sin_addr.s_addr = htonl(address);
+}
+
+void IPSocketAddress::set_address(const char* address) {
+    if (inet_aton(address, &(_ip_addr->sin_addr)) == 0) {
+        std::string error_msg =
+            utils::build_string("Invalid address: ", address);
+        throw std::invalid_argument(error_msg);
+    }
 }
 
 uint16_t IPSocketAddress::port() const { return ntohs(_ip_addr->sin_port); }
+
+void IPSocketAddress::set_port(uint16_t port) {
+    _ip_addr->sin_port = htons(port);
+}
 
 socklen_t IPSocketAddress::length() const {
     return sizeof(*_ip_addr);  // return size of ip address
@@ -101,12 +120,11 @@ const std::byte* MessageBuffer::raw() const { return _data.get(); }
 
 size_t MessageBuffer::length() const { return _length; }
 
-TCPConnection::TCPConnection(socket_t sock_fd,
-                             const IPSocketAddress& client_address)
-    : _socket{sock_fd}, _address{client_address} {}
+TCPConnection::TCPConnection(socket_t sock_fd, IPSocketAddress client_address)
+    : _socket{sock_fd}, _address{std::move(client_address)} {}
 
-TCPConnection::TCPConnection(const IPSocketAddress& server_address)
-    : _socket{std::nullopt}, _address{server_address} {}
+TCPConnection::TCPConnection(IPSocketAddress address)
+    : _socket{std::nullopt}, _address{std::move(address)} {}
 
 void TCPConnection::open() {
     if (!_socket.has_value()) {
