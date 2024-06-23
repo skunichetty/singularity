@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <system_error>
@@ -26,7 +27,7 @@ void throw_system_error(const std::string& message) {
 class TCPServer::TCPServerImpl {
    public:
     std::atomic<bool> shutdown;
-    uint16_t port;
+    uint16_t _port;
     pollfd socket_info;
 
     std::optional<std::thread> main_thread;
@@ -38,7 +39,7 @@ class TCPServer::TCPServerImpl {
                 MAX_PORT_NUM, "]");
             throw std::invalid_argument(error_message);
         }
-        port = static_cast<uint16_t>(port);
+        _port = static_cast<uint16_t>(port);
         socket_info.events = POLLIN;
     }
 
@@ -56,14 +57,13 @@ class TCPServer::TCPServerImpl {
             throw_system_error("Cannot enable socket reuse");
         }
 
-        IPSocketAddress address(INADDR_ANY, port);
+        IPSocketAddress address(INADDR_ANY, _port);
         int bind_status = bind(sock_fd, address.data(), address.length());
         if (bind_status == -1) {
             throw_system_error("Unable to bind socket to given port");
         }
 
-        // queue none - this is as connection queue is controlled at app level
-        int listen_status = listen(sock_fd, 1);
+        int listen_status = listen(sock_fd, 30);
         if (listen_status == -1) {
             throw_system_error("Unable to set socket to listen");
         }

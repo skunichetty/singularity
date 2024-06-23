@@ -5,15 +5,24 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <system_error>
 
 #include "utils.hpp"
 
-using namespace singularity::network;
-
 constexpr size_t MIN_BUFFER_SIZE = 1024;
 constexpr size_t BUFFER_EPSILON = 32;
+
+void disable(int socket_fd, int type) {
+    int status = shutdown(socket_fd, type);
+    if (status == -1) {
+        throw std::system_error(errno, std::system_category(),
+                                "Unable to disable sending/receiving");
+    }
+}
+
+namespace singularity::network {
 
 SocketAddress::SocketAddress() : _address{} {}
 
@@ -115,6 +124,16 @@ MessageBuffer MessageBuffer::from_string(std::string_view message) {
 MessageBuffer MessageBuffer::from_string(const char* message) {
     return {message, strlen(message) + 1};
 }
+bool operator==(const MessageBuffer& lhs, const MessageBuffer& rhs) {
+    if (lhs.length() == rhs.length()) {
+        return memcmp(lhs.raw(), rhs.raw(), lhs.length()) == 0;
+    }
+    return false;
+}
+
+bool operator!=(const MessageBuffer& lhs, const MessageBuffer& rhs) {
+    return !(lhs == rhs);
+}
 
 const std::byte* MessageBuffer::raw() const { return _data.get(); }
 
@@ -125,6 +144,20 @@ TCPConnection::TCPConnection(socket_t sock_fd, IPSocketAddress client_address)
 
 TCPConnection::TCPConnection(IPSocketAddress address)
     : _socket{std::nullopt}, _address{std::move(address)} {}
+
+TCPConnection::TCPConnection(TCPConnection&& other) noexcept
+    : _socket{other._socket}, _address{other._address} {
+    other._socket.reset();  // avoid double free on file descriptor
+}
+
+TCPConnection& TCPConnection::operator=(TCPConnection&& other) noexcept {
+    _socket = other._socket;
+    _address = other._address;
+    other._socket.reset();
+    return *this;
+}
+
+TCPConnection::~TCPConnection() { terminate(); }
 
 void TCPConnection::open() {
     if (!_socket.has_value()) {
@@ -147,14 +180,6 @@ void TCPConnection::terminate() {
         }
 
         _socket.reset();
-    }
-}
-
-void disable(int socket_fd, int type) {
-    int status = shutdown(socket_fd, type);
-    if (status == -1) {
-        throw std::system_error(errno, std::system_category(),
-                                "Unable to disable sending/receiving");
     }
 }
 
@@ -233,7 +258,7 @@ MessageBuffer TCPConnection::receive_message() {
         }
     } while (bytes_received != 0);
 
-    return MessageBuffer(buffer.get(), bytes_written);
+    return {buffer.get(), bytes_written};
 }
 
 std::string create_error(const char* prefix) {
@@ -249,3 +274,5 @@ InactiveConnectionError::InactiveConnectionError(const char* prefix)
 const char* InactiveConnectionError::what() const noexcept {
     return _message.data();
 }
+
+}  // namespace singularity::network

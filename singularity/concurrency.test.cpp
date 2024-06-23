@@ -134,7 +134,7 @@ TEST(FixedBufferTest, SimpleTest) {
 
 TEST(FixedBufferTest, TimeoutPop) {
     concurrency::FixedBuffer<int, 3> buffer;
-    auto elt = buffer.pop(std::chrono::milliseconds(10));
+    std::optional<int> elt = buffer.pop(std::chrono::milliseconds(10));
     EXPECT_EQ(elt, std::nullopt);
 }
 

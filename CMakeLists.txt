@@ -47,6 +47,12 @@ add_executable(tcp_server_test
 target_include_directories(tcp_server_test PRIVATE singularity)
 target_link_libraries(tcp_server_test GTest::gtest_main)
 
+add_executable(server_performance_loopback
+        test/server_performance_loopback.cpp
+        singularity/sockimpl.cpp
+        singularity/tcp_server.cpp)
+target_include_directories(server_performance_loopback PRIVATE singularity)
+
 include(GoogleTest)
 gtest_discover_tests(concurrency_test)
 gtest_discover_tests(sockimpl_test)

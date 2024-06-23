@@ -1,5 +1,6 @@
 #include "sockimpl.hpp"
 
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <netinet/in.h>
@@ -8,8 +9,6 @@
 #include <chrono>
 #include <limits>
 #include <thread>
-
-#include "arpa/inet.h"
 
 using namespace singularity::network;
 
@@ -138,8 +137,7 @@ TEST_F(TCPConnectionTest, ClientBasicLoopbackTest) {
     connection.disable_send();  // disable writes, trigger server response
 
     auto out = connection.receive_message();
-    EXPECT_STREQ(reinterpret_cast<const char*>(buffer.raw()),
-                 reinterpret_cast<const char*>(out.raw()));
+    EXPECT_TRUE(out == buffer);
 }
 
 TEST_F(TCPConnectionTest, ClientInvalidServer) {
@@ -180,7 +178,8 @@ TEST_F(TCPConnectionTest, ClientSideBufferTest) {
 
     constexpr size_t num_data = 43283;
     char data[num_data];
-    read(urandom, data, num_data);
+    ssize_t bytes_read = read(urandom, data, num_data);
+    EXPECT_GT(bytes_read, 0);
     MessageBuffer buffer(data, num_data);
 
     TCPConnection connection(IPSocketAddress("127.0.0.1", PORT));
@@ -200,8 +199,5 @@ TEST_F(TCPConnectionTest, ClientSideBufferTest) {
     auto out = connection.receive_message();
     connection.terminate();
 
-    EXPECT_EQ(out.length(), buffer.length());
-    for (size_t index = 0; index < out.length(); ++index) {
-        EXPECT_EQ(out.raw()[index], buffer.raw()[index]);
-    }
+    EXPECT_TRUE(out == buffer);
 }

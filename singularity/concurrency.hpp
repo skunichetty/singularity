@@ -5,6 +5,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <thread>
 
@@ -251,7 +252,7 @@ class FixedBuffer : public Buffer<T> {
     T pop() override {
         std::unique_lock<std::mutex> lock(_data_mutex);
         _wait_push.wait(lock, [this]() { return _size > 0; });
-        return _pop();
+        return std::forward<T>(_pop());
     }
 
     /**

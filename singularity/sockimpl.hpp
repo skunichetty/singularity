@@ -106,7 +106,12 @@ class MessageBuffer {
 
     [[nodiscard]] const std::byte* raw() const;
     [[nodiscard]] size_t length() const;
+
+    friend bool operator==(const MessageBuffer& lhs, const MessageBuffer& rhs);
+    friend bool operator!=(const MessageBuffer& lhs, const MessageBuffer& rhs);
 };
+
+
 
 /**
  * @brief Represents a TCP connection.
@@ -115,7 +120,7 @@ class MessageBuffer {
  * connection. It allows sending and receiving messages over the connection.
  */
 class TCPConnection {
-   private:
+   protected:
     std::optional<socket_t> _socket;
     IPSocketAddress _address;
 
@@ -139,6 +144,14 @@ class TCPConnection {
      * @param client_address The IP socket address of the client.
      */
     TCPConnection(socket_t sock_fd, IPSocketAddress address);
+    ~TCPConnection();
+
+    // cannot "copy" connection
+    TCPConnection(const TCPConnection& other) = delete;
+    TCPConnection& operator=(const TCPConnection& other) = delete;
+
+    TCPConnection(TCPConnection&& other) noexcept;
+    TCPConnection& operator=(TCPConnection&& other) noexcept;
 
     /**
      * @brief Sends a message over the TCP connection.
