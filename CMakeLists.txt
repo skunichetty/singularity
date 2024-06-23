@@ -26,13 +26,18 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-if (NOT MSVC)
+# Resolve system specific options
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wconversion -pthread")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wconversion")
-endif ()
+endif()
 
 if (CMAKE_CXX_COMPILE_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif ()
+
+message(STATUS "Found system \"${CMAKE_SYSTEM_NAME}\", using flags: ${CMAKE_CXX_FLAGS}")
 
 add_executable(singularity singularity/main.cpp)
 
