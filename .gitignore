@@ -1,3 +1,11 @@
 # build files
 build
 *.dSYM
+.cache
+
+# editor configuration
+.vscode
+.idea
+
+# other unwanted files
+.DS_STORE
