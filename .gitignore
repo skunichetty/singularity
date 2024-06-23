@@ -5,3 +5,7 @@ build
 
 # editor configuration
 .vscode
+.idea
+
+# other unwanted files
+.DS_STORE
