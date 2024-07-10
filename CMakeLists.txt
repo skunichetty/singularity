@@ -26,6 +26,18 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# Find and link OpenBLAS
+find_package(
+    OpenBLAS_CMAKE
+    REQUIRED
+    NAMES OpenBLAS
+    PATHS /opt/OpenBLAS/lib/cmake)
+if(OpenBLAS_CMAKE_FOUND)
+    message(STATUS "OpenBLAS Version: ${OpenBLAS_VERSION}")
+    message(STATUS "OpenBLAS Library: ${OpenBLAS_LIBRARIES}")
+    message(STATUS "OpenBLAS Include Directory: ${OpenBLAS_INCLUDE_DIRS}")
+endif()
+
 # Resolve system specific options
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wconversion -pthread")
@@ -40,6 +52,8 @@ endif ()
 message(STATUS "Found system \"${CMAKE_SYSTEM_NAME}\", using flags: ${CMAKE_CXX_FLAGS}")
 
 add_executable(singularity singularity/main.cpp)
+target_include_directories(singularity PRIVATE ${OpenBLAS_INCLUDE_DIRS})
+target_link_libraries(singularity ${OpenBLAS_LIBRARIES})
 
 enable_testing()
 
