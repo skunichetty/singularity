@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
 project(singularity LANGUAGES CXX)
 
+if (POLICY CMP0077)
+  cmake_policy (SET CMP0077 NEW)
+endif (POLICY CMP0077)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
@@ -21,10 +25,9 @@ FetchContent_MakeAvailable(googletest)
 include(FetchContent)
 FetchContent_Declare(
         googletest
-        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
 
 # Find and link OpenBLAS
 find_package(
@@ -52,8 +55,7 @@ endif ()
 message(STATUS "Found system \"${CMAKE_SYSTEM_NAME}\", using flags: ${CMAKE_CXX_FLAGS}")
 
 add_executable(singularity singularity/main.cpp)
-target_include_directories(singularity PRIVATE ${OpenBLAS_INCLUDE_DIRS})
-target_link_libraries(singularity ${OpenBLAS_LIBRARIES})
+target_link_libraries(singularity openblas_static)
 
 enable_testing()
 
