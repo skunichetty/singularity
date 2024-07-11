@@ -2,8 +2,14 @@ cmake_minimum_required(VERSION 3.14)
 project(singularity LANGUAGES CXX)
 
 if (POLICY CMP0077)
-  cmake_policy (SET CMP0077 NEW)
+    cmake_policy(SET CMP0077 NEW)
 endif (POLICY CMP0077)
+
+if (POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif (POLICY CMP0135)
+
+message(STATUS "Starting configuration process in directory ${CMAKE_CURRENT_SOURCE_DIR}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
@@ -15,47 +21,42 @@ set(CMAKE_CXX_FLAGS "-Wall")
 # Fetch requisite dependencies
 include(FetchContent)
 FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-# Fetch requisite dependencies
-include(FetchContent)
-FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
-# Find and link OpenBLAS
-find_package(
-    OpenBLAS_CMAKE
-    REQUIRED
-    NAMES OpenBLAS
-    PATHS /opt/OpenBLAS/lib/cmake)
-if(OpenBLAS_CMAKE_FOUND)
-    message(STATUS "OpenBLAS Version: ${OpenBLAS_VERSION}")
-    message(STATUS "OpenBLAS Library: ${OpenBLAS_LIBRARIES}")
-    message(STATUS "OpenBLAS Include Directory: ${OpenBLAS_INCLUDE_DIRS}")
-endif()
+FetchContent_Declare(
+    openblas
+    URL https://github.com/OpenMathLib/OpenBLAS/archive/refs/tags/v0.3.27.tar.gz
+    URL_HASH MD5=ef71c66ffeb1ab0f306a37de07d2667f 
+)
+
+# Set OpenBLAS configure options
+set(BUILD_TESTING OFF)
+set(BUILD_LAPACK_DEPRECATED OFF)
+set(BUILD_STATIC_LIBS ON)
+set(ONLY_CBLAS ON)
+
+FetchContent_MakeAvailable(googletest openblas)
 
 # Resolve system specific options
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wconversion -pthread")
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wconversion")
-endif()
+endif ()
 
 if (CMAKE_CXX_COMPILE_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif ()
 
-message(STATUS "Found system \"${CMAKE_SYSTEM_NAME}\", using flags: ${CMAKE_CXX_FLAGS}")
+message(STATUS "Found system \"${CMAKE_SYSTEM_NAME}\", using flags: ${CMAKE_CXX_FLAGS} ")
 
 add_executable(singularity singularity/main.cpp)
 target_link_libraries(singularity openblas_static)
+target_include_directories(singularity PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_include_directories(singularity PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 enable_testing()
 
