@@ -63,7 +63,9 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -S ${{ github.workspace }}
       - name: Build
-        run: cmake --build ${{ steps.build_dir.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+        env:
+          njobs: 12
+        run: cmake --build ${{ steps.build_dir.outputs.build-output-dir }} --config ${{ matrix.build_type }} -- -j ${{ env.njobs }}
       - name: Test
         working-directory: ${{ steps.build_dir.outputs.build-output-dir }}
         run: ctest --build-config ${{ matrix.build_type }}
